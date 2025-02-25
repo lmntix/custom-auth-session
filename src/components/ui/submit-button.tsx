@@ -2,17 +2,21 @@
 
 import { forwardRef } from 'react';
 import { useFormStatus } from 'react-dom';
-import { LoadingButton } from '@/components/ui/loading-button';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 import type { ButtonProps } from '@/components/ui/button';
 
 const SubmitButton = forwardRef<HTMLButtonElement, ButtonProps>(({ className, children, ...props }, ref) => {
   const { pending } = useFormStatus();
+
   return (
-    <LoadingButton ref={ref} {...props} loading={pending} className={className}>
+    <Button ref={ref} {...props} disabled={pending} className={className}>
+      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
       {children}
-    </LoadingButton>
+    </Button>
   );
 });
+
 SubmitButton.displayName = 'SubmitButton';
 
 export { SubmitButton };

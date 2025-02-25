@@ -41,19 +41,19 @@ const smtpConfig = {
   port: env.SMTP_PORT,
   auth: {
     user: env.SMTP_USER,
-    pass: env.SMTP_PASSWORD,
+    pass: env.SMTP_PASS,
   },
 };
 
 const transporter = createTransport(smtpConfig as TransportOptions);
 
 export const sendMail = async <T extends EmailTemplate>(to: string, template: T, props: PropsMap[NoInfer<T>]) => {
-  if (env.MOCK_SEND_EMAIL) {
+  if (process.env.MOCK_SEND_EMAIL) {
     logger.info('📨 Email sent to:', to, 'with template:', template, 'and props:', props);
     return;
   }
 
   const { subject, body } = getEmailTemplate(template, props);
 
-  return transporter.sendMail({ from: EMAIL_SENDER, to, subject, html: body });
+  return transporter.sendMail({ from: EMAIL_SENDER, to, subject, html: body.toString() });
 };

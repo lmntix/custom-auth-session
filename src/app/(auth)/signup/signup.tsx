@@ -1,32 +1,29 @@
 'use client';
 
-import Link from 'next/link';
 import { useActionState } from 'react';
-import { Input } from '@/components/ui/input';
+import Link from 'next/link';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PasswordInput } from '@/components/ui/password-input';
+import { Input } from '@/components/ui/input';
 import { APP_TITLE } from '@/lib/constants';
-import { login } from '@/lib/auth/actions';
 import { Label } from '@/components/ui/label';
+import { signup } from '@/lib/auth/actions';
 import { SubmitButton } from '@/components/ui/submit-button';
 
-type LoginState = {
+type SignupState = {
   fieldError?: Record<string, string>;
   formError?: string;
 } | null;
 
-export function Login() {
-  const [state, submitAction, isPending] = useActionState<LoginState, FormData>(async (prevState, formData) => {
-    const result = await login(prevState, formData);
-    return result;
-  }, null);
+export function Signup() {
+  const [state, submitAction, isPending] = useActionState<SignupState, FormData>(signup, null);
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <CardTitle>{APP_TITLE} Log In</CardTitle>
-        <CardDescription>Log in to your account to access your dashboard</CardDescription>
+        <CardTitle>{APP_TITLE} Sign Up</CardTitle>
+        <CardDescription>Sign up to start using the app</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="my-2 flex items-center">
@@ -34,30 +31,15 @@ export function Login() {
           <div className="mx-2 text-muted-foreground">or</div>
           <div className="flex-grow border-t border-muted" />
         </div>
-        <form action={submitAction} className="grid gap-4">
+
+        <form action={submitAction} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input required id="email" placeholder="email@example.com" autoComplete="email" name="email" type="email" />
+            <Input id="email" required placeholder="email@example.com" autoComplete="email" name="email" type="email" />
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <PasswordInput
-              id="password"
-              name="password"
-              required
-              autoComplete="current-password"
-              placeholder="********"
-            />
-          </div>
-
-          <div className="flex flex-wrap justify-between">
-            <Button variant={'link'} size={'sm'} className="p-0" asChild>
-              <Link href={'/signup'}>Not signed up? Sign up now.</Link>
-            </Button>
-            <Button variant={'link'} size={'sm'} className="p-0" asChild>
-              <Link href={'/reset-password'}>Forgot password?</Link>
-            </Button>
+            <PasswordInput id="password" name="password" required autoComplete="new-password" placeholder="********" />
           </div>
 
           {state?.fieldError ? (
@@ -73,9 +55,17 @@ export function Login() {
               {state?.formError}
             </p>
           ) : null}
-          <SubmitButton className="w-full" aria-label="submit-btn" disabled={isPending}>
-            {isPending ? 'Logging In...' : 'Log In'}
-          </SubmitButton>
+          <div>
+            <Link href={'/login'}>
+              <span className="p-0 text-xs font-medium underline-offset-4 hover:underline">
+                Already signed up? Login instead.
+              </span>
+            </Link>
+          </div>
+
+          <Button className="w-full" aria-label="submit-btn" disabled={isPending}>
+            {isPending ? 'Signing Up...' : 'Sign Up'}
+          </Button>
           <Button variant="outline" className="w-full" asChild>
             <Link href="/">Cancel</Link>
           </Button>

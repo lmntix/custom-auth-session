@@ -2,11 +2,13 @@
 
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
+import { isWithinExpirationDate, TimeSpan, createDate } from '@/utils/date';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { emailVerificationCodes, passwordResetTokens, users } from '@/db/schema/auth';
+import { loginSchema, signupSchema, type LoginInput, type SignupInput, resetPasswordSchema } from '@/lib/auth/types';
+import { emailVerificationCodes, passwordResetTokens, users } from '@/db/schema';
 import { sendMail, EmailTemplate } from '@/lib/email';
-import { Paths } from '@/lib/constants';
+import { Paths } from '../constants';
 import { env } from '@/env';
 import {
   createSession,
@@ -18,46 +20,29 @@ import {
   validateRequest,
 } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
-import { createDate, isWithinExpirationDate, TimeSpan } from '@/utils/date';
-import {
-  LoginActionState,
-  LoginInput,
-  loginSchema,
-  ResetPasswordActionState,
-  resetPasswordSchema,
-  SignupActionState,
-  SignupInput,
-  signupSchema,
-  VerifyEmailActionState,
-} from './types';
 
 export interface ActionResponse<T> {
-  fieldErrors?: Partial<Record<keyof T, string[]>>;
+  fieldError?: Partial<Record<keyof T, string | undefined>>;
   formError?: string;
-  success?: boolean;
 }
 
-export async function login(_prevState: LoginActionState, formData: FormData): Promise<ActionResponse<LoginInput>> {
+export async function login(_: unknown, formData: FormData): Promise<ActionResponse<LoginInput>> {
   const obj = Object.fromEntries(formData.entries());
 
   const parsed = loginSchema.safeParse(obj);
   if (!parsed.success) {
     const err = parsed.error.flatten();
     return {
-      fieldErrors: {
-        email: err.fieldErrors.email,
-        password: err.fieldErrors.password,
+      fieldError: {
+        email: err.fieldErrors.email?.[0],
+        password: err.fieldErrors.password?.[0],
       },
     };
   }
 
   const { email, password } = parsed.data;
 
-  const [existingUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
   if (!existingUser?.hashedPassword) {
     return {
@@ -77,27 +62,23 @@ export async function login(_prevState: LoginActionState, formData: FormData): P
   return redirect(Paths.LoggedInRedirect);
 }
 
-export async function signup(_prevState: SignupActionState, formData: FormData): Promise<ActionResponse<SignupInput>> {
+export async function signup(_: unknown, formData: FormData): Promise<ActionResponse<SignupInput>> {
   const obj = Object.fromEntries(formData.entries());
 
   const parsed = signupSchema.safeParse(obj);
   if (!parsed.success) {
     const err = parsed.error.flatten();
     return {
-      fieldErrors: {
-        email: err.fieldErrors.email,
-        password: err.fieldErrors.password,
+      fieldError: {
+        email: err.fieldErrors.email?.[0],
+        password: err.fieldErrors.password?.[0],
       },
     };
   }
 
   const { email, password } = parsed.data;
 
-  const [existingUser] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const [existingUser] = await db.select({ email: users.email }).from(users).where(eq(users.email, email)).limit(1);
 
   if (existingUser) {
     return {
@@ -121,11 +102,11 @@ export async function signup(_prevState: SignupActionState, formData: FormData):
   return redirect(Paths.VerifyEmail);
 }
 
-export async function logout(): Promise<ActionResponse<{}> | void> {
+export async function logout(): Promise<{ error: string } | void> {
   const { session } = await validateRequest();
   if (!session) {
     return {
-      formError: 'No session found',
+      error: 'No session found',
     };
   }
   await invalidateSession(session.id);
@@ -133,7 +114,10 @@ export async function logout(): Promise<ActionResponse<{}> | void> {
   return redirect('/');
 }
 
-export async function resendVerificationEmail(): Promise<ActionResponse<{}>> {
+export async function resendVerificationEmail(): Promise<{
+  error?: string;
+  success?: boolean;
+}> {
   const { user } = await validateRequest();
   if (!user) {
     return redirect(Paths.Login);
@@ -146,7 +130,7 @@ export async function resendVerificationEmail(): Promise<ActionResponse<{}>> {
 
   if (lastSent && isWithinExpirationDate(lastSent.expiresAt)) {
     return {
-      formError: `Please wait ${timeFromNow(lastSent.expiresAt)} before resending`,
+      error: `Please wait ${timeFromNow(lastSent.expiresAt)} before resending`,
     };
   }
   const verificationCode = await generateEmailVerificationCode(user.id, user.email);
@@ -155,13 +139,10 @@ export async function resendVerificationEmail(): Promise<ActionResponse<{}>> {
   return { success: true };
 }
 
-export async function verifyEmail(
-  _prevState: VerifyEmailActionState,
-  formData: FormData
-): Promise<ActionResponse<VerifyEmailInput> | void> {
+export async function verifyEmail(_: unknown, formData: FormData): Promise<{ error: string } | void> {
   const code = formData.get('code');
-  if (typeof code !== 'string' || code.length !== 8) {
-    return { formError: 'Invalid code' };
+  if (typeof code !== 'string' || code.length !== 6) {
+    return { error: 'Invalid code' };
   }
 
   const { user } = await validateRequest();
@@ -181,9 +162,9 @@ export async function verifyEmail(
     return item;
   });
 
-  if (!dbCode || dbCode.code !== code) return { formError: 'Invalid verification code' };
-  if (!isWithinExpirationDate(dbCode.expiresAt)) return { formError: 'Verification code expired' };
-  if (dbCode.email !== user.email) return { formError: 'Email does not match' };
+  if (!dbCode || dbCode.code !== code) return { error: 'Invalid verification code' };
+  if (!isWithinExpirationDate(dbCode.expiresAt)) return { error: 'Verification code expired' };
+  if (dbCode.email !== user.email) return { error: 'Email does not match' };
 
   await invalidateUserSessions(user.id);
   await db.update(users).set({ emailVerified: true }).where(eq(users.id, user.id));
@@ -194,22 +175,18 @@ export async function verifyEmail(
 }
 
 export async function sendPasswordResetLink(
-  _prevState: ResetPasswordActionState,
+  _: unknown,
   formData: FormData
-): Promise<ActionResponse<{ email: string }>> {
+): Promise<{ error?: string; success?: boolean }> {
   const email = formData.get('email');
   const parsed = z.string().trim().email().safeParse(email);
   if (!parsed.success) {
-    return { formError: 'Provided email is invalid.' };
+    return { error: 'Provided email is invalid.' };
   }
   try {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, parsed.data))
-      .limit(1);
+    const [user] = await db.select().from(users).where(eq(users.email, parsed.data)).limit(1);
 
-    if (!user || !user.emailVerified) return { formError: 'Provided email is invalid.' };
+    if (!user || !user.emailVerified) return { error: 'Provided email is invalid.' };
 
     const verificationToken = await generatePasswordResetToken(user.id);
 
@@ -219,14 +196,11 @@ export async function sendPasswordResetLink(
 
     return { success: true };
   } catch (error) {
-    return { formError: 'Failed to send verification email.' };
+    return { error: 'Failed to send verification email.' };
   }
 }
 
-export async function resetPassword(
-  _prevState: ResetPasswordActionState,
-  formData: FormData
-): Promise<ActionResponse<ResetPasswordInput>> {
+export async function resetPassword(_: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
   const obj = Object.fromEntries(formData.entries());
 
   const parsed = resetPasswordSchema.safeParse(obj);
@@ -234,29 +208,22 @@ export async function resetPassword(
   if (!parsed.success) {
     const err = parsed.error.flatten();
     return {
-      fieldErrors: {
-        password: err.fieldErrors.password,
-        token: err.fieldErrors.token,
-      },
+      error: err.fieldErrors.password?.[0] ?? err.fieldErrors.token?.[0],
     };
   }
   const { token: inputToken, password } = parsed.data;
 
   const dbToken = await db.transaction(async tx => {
-    const [item] = await tx
-      .select()
-      .from(passwordResetTokens)
-      .where(eq(passwordResetTokens.id, inputToken))
-      .limit(1);
+    const [item] = await tx.select().from(passwordResetTokens).where(eq(passwordResetTokens.id, inputToken)).limit(1);
     if (item) {
       await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.id, item.id));
     }
     return item;
   });
 
-  if (!dbToken) return { formError: 'Invalid password reset link' };
+  if (!dbToken) return { error: 'Invalid password reset link' };
 
-  if (!isWithinExpirationDate(dbToken.expiresAt)) return { formError: 'Password reset link expired.' };
+  if (!isWithinExpirationDate(dbToken.expiresAt)) return { error: 'Password reset link expired.' };
 
   await invalidateUserSessions(dbToken.userId);
   const hashedPassword = await bcrypt.hash(password, 10);
