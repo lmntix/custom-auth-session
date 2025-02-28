@@ -1,43 +1,26 @@
 'use client';
 
 import Link from 'next/link';
+import { useActionState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PasswordInput } from '@/components/ui/password-input';
 import { APP_TITLE } from '@/lib/constants';
+import { login } from '@/lib/auth/actions';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import { useAction } from 'next-safe-action/hooks';
-import { login } from '@/lib/auth/actions/login';
+import { SubmitButton } from '@/components/ui/submit-button';
+
+type LoginState = {
+  fieldError?: Record<string, string>;
+  formError?: string;
+} | null;
 
 export function Login() {
-  const {
-    execute,
-    isExecuting: isPending,
-    result,
-  } = useAction(login, {
-    onSuccess: ({ data }) => {
-      if (data?.success) {
-        toast.success(data.message);
-      }
-      if (data?.success === false) {
-        toast.error(data.message);
-      }
-    },
-    onError: () => {
-      toast.error('An error occurred');
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-
-    execute({ email, password });
-  };
+  const [state, submitAction, isPending] = useActionState<LoginState, FormData>(async (prevState, formData) => {
+    const result = await login(prevState, formData);
+    return result;
+  }, null);
 
   return (
     <Card className="w-full max-w-md">
@@ -46,18 +29,10 @@ export function Login() {
         <CardDescription>Log in to your account to access your dashboard</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form action={submitAction} className="grid gap-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              required
-              id="email"
-              placeholder="email@example.com"
-              autoComplete="email"
-              name="email"
-              type="email"
-              disabled={isPending}
-            />
+            <Input required id="email" placeholder="email@example.com" autoComplete="email" name="email" type="email" />
           </div>
 
           <div className="space-y-2">
@@ -68,7 +43,6 @@ export function Login() {
               required
               autoComplete="current-password"
               placeholder="********"
-              disabled={isPending}
             />
           </div>
 
@@ -81,18 +55,22 @@ export function Login() {
             </Button>
           </div>
 
-          {result?.validationErrors && (
-            <div className="rounded-lg border bg-destructive/10 p-2 text-[0.8rem] font-medium text-destructive">
-              {Object.values(result.validationErrors).map((error, index) => (
-                <p key={index}>{error}</p>
+          {state?.fieldError ? (
+            <ul className="list-disc space-y-1 rounded-lg border bg-destructive/10 p-2 text-[0.8rem] font-medium text-destructive">
+              {Object.values(state.fieldError).map(err => (
+                <li className="ml-4" key={err}>
+                  {err}
+                </li>
               ))}
-            </div>
-          )}
-
-          <Button type="submit" className="w-full" aria-label="submit-btn" disabled={isPending}>
+            </ul>
+          ) : state?.formError ? (
+            <p className="rounded-lg border bg-destructive/10 p-2 text-[0.8rem] font-medium text-destructive">
+              {state?.formError}
+            </p>
+          ) : null}
+          <SubmitButton className="w-full" aria-label="submit-btn" disabled={isPending}>
             {isPending ? 'Logging In...' : 'Log In'}
-          </Button>
-
+          </SubmitButton>
           <Button variant="outline" className="w-full" asChild>
             <Link href="/">Cancel</Link>
           </Button>

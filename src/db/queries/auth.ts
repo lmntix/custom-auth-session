@@ -1,15 +1,9 @@
-"use server";
-import db from "@/db";
-import { Invitation, invitations, organizations } from "@/db/schema/auth";
-import { eq, and } from "drizzle-orm";
+import db from '@/db';
+import { Invitation, invitations, organizations } from '@/db/schema/auth';
+import { eq, and } from 'drizzle-orm';
 
 export async function checkInvitation(email: string): Promise<boolean> {
-  const result = await db
-    .select()
-    .from(invitations)
-    .where(eq(invitations.email, email))
-    .execute();
-
+  const result = await db.select().from(invitations).where(eq(invitations.email, email)).execute();
   return result.length > 0;
 }
 
@@ -29,7 +23,7 @@ export async function getPendingInvitations(
     })
     .from(invitations)
     .leftJoin(organizations, eq(invitations.organizationId, organizations.id))
-    .where(and(eq(invitations.email, email), eq(invitations.status, "pending")))
+    .where(and(eq(invitations.email, email), eq(invitations.status, 'pending')))
     .execute();
 
   return result;

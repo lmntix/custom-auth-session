@@ -4,6 +4,7 @@ import db from '@/db';
 import { sessions } from '@/db/schema/auth';
 import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
+import { validateRequest } from '@/lib/auth';
 
 export default async function RootLayout({
   children,
@@ -12,9 +13,8 @@ export default async function RootLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }>) {
-  const session = await getSession();
+  const session = await validateRequest();
   const { id: currentid } = await params;
-  console.log('current id : ', currentid);
 
   if (!session.session) {
     return redirect('/login');
@@ -26,5 +26,13 @@ export default async function RootLayout({
     .where(eq(sessions.id, session.session?.id))
     .execute();
 
-  return <div>{children}</div>;
+  return (
+    <div>
+      <div className="p-4 mb-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <h2 className="text-lg font-semibold mb-2">Current Session Info</h2>
+        <p>Active Organization ID: {session.session?.activeOrganizationId}</p>
+      </div>
+      {children}
+    </div>
+  );
 }

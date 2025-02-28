@@ -22,3 +22,8 @@ export const resetPasswordSchema = z.object({
   password: z.string().min(8, 'Password is too short').max(255),
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export type ActionResult = {
+  success: boolean;
+  message: string;
+};
